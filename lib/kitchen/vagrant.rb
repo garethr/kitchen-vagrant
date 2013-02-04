@@ -1,5 +1,5 @@
-# -*- encoding: utf-8 -*-
 #
+# -*- encoding: utf-8 -*-
 # Author:: Fletcher Nichol (<fnichol@nichol.ca>)
 #
 # Copyright (C) 2012, Fletcher Nichol
@@ -68,17 +68,57 @@ module Kitchen
         c.vm.box_url = driver[:box_url] if driver[:box_url]
         c.vm.host_name = "#{instance.name}.vagrantup.com"
 
+        unless driver[:forward_port].nil?
+          if driver[:forward_port].length != 2
+            raise ArgumentError, "Vagrant config.vm.forward_port only accepts two arguments"
+          end
+          c.vm.forward_port driver[:forward_port][0], driver[:forward_port][1]
+        end
+
+        unless driver[:network].nil?
+          driver[:network].each do |type,ip|
+            unless ip.nil?
+              network_options = ":#{type}, \'#{ip}\'"
+            else
+              network_options = ":#{type}"
+            end
+            instance_eval "c.vm.network #{network_options}"
+          end
+        end
+
         driver[:customize].each do |key,value|
           c.vm.customize ["modifyvm", :id, "--#{key}", value]
         end
 
-        c.vm.provision :chef_solo do |chef|
-          chef.log_level = config.kitchen.log_level
-          chef.run_list = instance.run_list
-          chef.json = instance.attributes
-          chef.data_bags_path = instance.suite.data_bags_path
-          chef.roles_path = instance.suite.roles_path
+        # defaulting to chef to retain existing behaviour
+        provisioner = instance.respond_to?('provisioner') ? instance.provisioner : 'chef'
+
+        case provisioner
+        when "puppet"
+
+          # hopefully sane defaults. At the moment you can't override these
+          # without changes to test-kitchen
+          manifests_path = instance.respond_to?('manifests_path') ? instance.manifests_path : 'manifests'
+          module_path = instance.respond_to?('module_path') ? instance.manifests_path : 'modules'
+          manifest_file = instance.respond_to?('manifest_file') ? instance.manifests_path : 'base.pp'
+
+          c.vm.provision :puppet,
+            :options => ["--debug", "--verbose", "--summarize", "--reports", "store"] do |puppet|
+              puppet.manifests_path = manifests_path
+              puppet.module_path = module_path
+              puppet.manifest_file = manifest_file
+          end
+        when "none"
+        else
+          c.vm.provision :chef_solo do |chef|
+            chef.log_level = config.kitchen.log_level
+            chef.run_list = instance.run_list
+            chef.json = instance.attributes
+            chef.data_bags_path = instance.suite.data_bags_path
+            chef.roles_path = instance.suite.roles_path
+          end
         end
+
       end
     end
   end
