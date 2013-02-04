@@ -102,8 +102,7 @@ module Kitchen
           module_path = instance.respond_to?('module_path') ? instance.manifests_path : 'modules'
           manifest_file = instance.respond_to?('manifest_file') ? instance.manifests_path : 'base.pp'
 
-          c.vm.provision :puppet,
-            :options => ["--debug", "--verbose", "--summarize", "--reports", "store"] do |puppet|
+          c.vm.provision :puppet do |puppet|
               puppet.manifests_path = manifests_path
               puppet.module_path = module_path
               puppet.manifest_file = manifest_file
